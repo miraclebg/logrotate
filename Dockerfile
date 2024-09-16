@@ -1,4 +1,20 @@
-FROM blacklabelops/alpine:3.8
+FROM alpine AS build-gocron
+
+MAINTAINER Martin Kovachev <miracle@nimasystems.com>
+
+WORKDIR /build
+
+RUN apk add --update \
+    git go
+RUN git clone https://github.com/michaloo/go-cron.git \
+    && cd go-cron \
+    && go mod init gocron \
+    && go mod tidy \
+    && go build -o go-cron ./go-cron.go
+
+FROM alpine
+
+MAINTAINER Martin Kovachev <miracle@nimasystems.com>
 MAINTAINER Steffen Bleul <sbl@blacklabelops.com>
 
 # logrotate version (e.g. 3.9.1-r0)
@@ -16,17 +32,19 @@ RUN export CONTAINER_USER=logrotate && \
       tar \
       gzip \
       wget \
+      bash \
+      tini \
       tzdata && \
     if  [ "${LOGROTATE_VERSION}" = "latest" ]; \
       then apk add logrotate ; \
       else apk add "logrotate=${LOGROTATE_VERSION}" ; \
     fi && \
     mkdir -p /usr/bin/logrotate.d && \
-    wget --no-check-certificate -O /tmp/go-cron.tar.gz https://github.com/michaloo/go-cron/releases/download/v0.0.2/go-cron.tar.gz && \
-    tar xvf /tmp/go-cron.tar.gz -C /usr/bin && \
     apk del \
       wget && \
     rm -rf /var/cache/apk/* && rm -rf /tmp/*
+
+COPY --from=build-gocron /build/go-cron/go-cron /usr/bin/go-cron
 
 # environment variable for this container
 ENV LOGROTATE_OLDDIR= \
